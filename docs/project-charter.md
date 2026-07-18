@@ -27,6 +27,17 @@ Researchers and engineers evaluating the reliability of tool-using LLM agents, p
 2. An adaptive policy that selects verification actions based on corruption signals achieves lower regret than any single static strategy.
 3. The price of uncertainty varies by corruption type — plausible-but-wrong outputs are the most expensive to handle because they evade cheap detection methods.
 
+## Scope
+
+- **12–20 synthetic tasks** across three domains: order support, scheduling, structured data analysis
+- **4 corruption conditions:** clean output, explicit tool error, malformed/incomplete output, plausible but incorrect output
+- **5 agent strategies:** baseline, bounded retry, critic, verifier, adaptive
+- **2 model sources:** one API model (OpenAI), one local model (Ollama)
+- **5 repeated trials** per configuration
+- **Primary metrics:** total cost (token + error), regret vs oracle, recovery rate, detection rate, consistency, latency
+- **Human review:** ~50 ambiguous or representative traces
+- **All data is synthetic** — no proprietary or employer-sourced material
+
 ## Non-goals
 
 - Building a production agent framework
