@@ -1,0 +1,40 @@
+# Full experiment — 12 tasks × 4 conditions × 4 strategies × 2 providers × 5 trials = 1,920 runs
+experiment_id: main-001
+description: "Primary experiment measuring agent recovery under corrupted tool outputs."
+
+tasks:
+  # Order support domain
+  - order-001
+  - order-002
+  - order-003
+  - order-004
+  # Scheduling domain
+  - sched-001
+  - sched-002
+  - sched-003
+  - sched-004
+  # Structured data analysis domain
+  - data-001
+  - data-002
+  - data-003
+  - data-004
+
+strategies:
+  - baseline
+  - retry
+  - critic
+  - verifier
+
+corruption_modes:
+  - clean
+  - explicit_error
+  - malformed
+  - plausible_wrong
+
+providers:
+  - openai
+  - ollama
+
+trials: 5
+concurrency: 4
+timeout_seconds: 120.0
