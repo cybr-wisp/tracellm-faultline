@@ -1,6 +1,12 @@
-# Full experiment — 12 tasks × 4 conditions × 4 strategies × 2 providers × 5 trials = 1,920 runs
+# Full experiment — adaptive policy evaluation against oracle baseline
 experiment_id: main-001
-description: "Primary experiment measuring agent recovery under corrupted tool outputs."
+description: >
+  Primary experiment: evaluate static and adaptive verification strategies
+  against an oracle-optimal baseline, measuring regret across corruption modes.
+research_question: >
+  Can a corruption-aware agent learn an adaptive verification policy that
+  minimizes expected total cost (token spend + error cost) across heterogeneous
+  failure modes, and how close does this policy come to the oracle-optimal strategy?
 
 tasks:
   # Order support domain
@@ -24,6 +30,7 @@ strategies:
   - retry
   - critic
   - verifier
+  - adaptive  # The core experimental condition
 
 corruption_modes:
   - clean
@@ -34,6 +41,16 @@ corruption_modes:
 providers:
   - openai
   - ollama
+
+cost_model:
+  input_token_cost_per_1k: 0.005
+  output_token_cost_per_1k: 0.015
+  error_costs:
+    none: 0.0
+    minor: 0.10
+    moderate: 1.00
+    severe: 5.00
+    critical: 25.00
 
 trials: 5
 concurrency: 4
