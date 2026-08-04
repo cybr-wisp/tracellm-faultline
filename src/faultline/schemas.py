@@ -30,8 +30,6 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
-
-
 class CorruptionMode(str, Enum):
     """The four experimental corruption conditions."""
 
