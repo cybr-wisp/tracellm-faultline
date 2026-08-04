@@ -1,14 +1,5 @@
-### TraceLLM-Faultline 
+## TraceLLM-Faultline 
 **A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
-
-tracellm-faultline
-
-**A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
-
-Part of the [TraceLLM](https://github.com/cybr-wisp) project.
-
-
-# tracellm-faultline
 
 [![Tests](https://github.com/cybr-wisp/tracellm-faultline/actions/workflows/ci.yml/badge.svg)](https://github.com/cybr-wisp/tracellm-faultline/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
