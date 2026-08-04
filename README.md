@@ -173,5 +173,9 @@ Detailed project documentation lives in [`docs/`](docs/):
 
 [MIT](LICENSE)
 
+## Community
 
-Built with ☕ by Marie Sindhu (cybr-wisp)
+📜 [License](LICENSE) · 🤝 [Contributing](CONTRIBUTING.md) · 📋 [Code of Conduct](CODE_OF_CONDUCT.md) · 🗺️ [Roadmap](ROADMAP.md)
+
+
+<p align="center">Built with ☕ by Marie Sindhu (<a href="https://github.com/cybr-wisp">cybr-wisp</a>)</p>
