@@ -1,3 +1,4 @@
+
 """Core Pydantic schemas for tasks, tool calls, messages, runs, steps, and results.
 
 This module defines the typed data structures that flow through the entire system.
@@ -5,17 +6,18 @@ Every trace event, tool interaction, and experiment result is validated here.
 
 The schemas support the core research question:
 
-    Can a corruption-aware agent learn an adaptive verification policy that
-    minimizes expected total cost (token spend + error cost) across heterogeneous
-    failure modes, and how close does this policy come to the oracle-optimal strategy?
+    What are the break-even conditions under which tool-output verification
+    becomes cost-negative for LLM agents, how do these conditions vary across
+    output conditions, and how closely can a signal-based adaptive policy
+    track the oracle-optimal verification frontier?
 
 Key concepts encoded here:
-  - CostModel: assigns real dollar costs to token usage and error severity
-  - ErrorSeverity: graduated error impact (not just binary success/failure)
+  - CostModel: three-part cost decomposition C_total = C_tokens + E[Damage_missed] + E[Damage_flipped]
+  - RecoveryRecord: four-part recovery (detection, corrective action, success, informed correctness)
   - VerificationDecision: per-step record of what the agent chose to do and why
   - OracleAction: what a perfect-information agent would have done
-  - RegretRecord: the gap between actual and oracle-optimal cost
-  - AgentStrategy.ADAPTIVE: a policy that decides per-step whether to verify
+  - RegretRecord: the gap between actual and oracle-optimal cost at each C_e level
+  - AgentStrategy.ADAPTIVE: a policy π(x) that decides per-step whether to verify
 """
 
 from __future__ import annotations
@@ -30,8 +32,13 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
-class CorruptionMode(str, Enum):
-    """The four experimental corruption conditions."""
+
+class OutputCondition(str, Enum):
+    """The four experimental output conditions.
+    
+    Called 'output conditions' not 'corruption types' because
+    Clean is one of the four conditions but is not corruption.
+    """
 
     CLEAN = "clean"
     EXPLICIT_ERROR = "explicit_error"
@@ -40,10 +47,10 @@ class CorruptionMode(str, Enum):
 
 
 class AgentStrategy(str, Enum):
-    """The five agent recovery strategies under evaluation.
+    """The five agent verification strategies under evaluation.
 
     The first four are static (always apply the same policy).
-    ADAPTIVE decides per-step based on corruption signals.
+    ADAPTIVE decides per-step based on observable corruption signals.
     """
 
     BASELINE = "baseline"
@@ -69,30 +76,13 @@ class RunStatus(str, Enum):
     TIMEOUT = "timeout"
 
 
-class ErrorSeverity(str, Enum):
-    """Graduated error impact — drives the cost model.
-
-    NONE:     Correct answer, no error.
-    MINOR:    Small inaccuracy, unlikely to cause downstream harm.
-    MODERATE: Wrong answer that would require human correction.
-    SEVERE:   Wrong answer that could cause material downstream damage.
-    CRITICAL: Confidently wrong answer propagated without any detection.
-    """
-
-    NONE = "none"
-    MINOR = "minor"
-    MODERATE = "moderate"
-    SEVERE = "severe"
-    CRITICAL = "critical"
-
-
 class VerificationAction(str, Enum):
     """What the agent decided to do at a verification decision point."""
 
-    ACCEPT = "accept"          # Trust the tool output, move on
+    PASS = "pass"              # Trust the tool output, no verification
     RETRY = "retry"            # Call the tool again
     INVOKE_CRITIC = "critic"   # Ask a critic LLM to evaluate
-    INVOKE_VERIFIER = "verify" # Ask a verifier LLM to check the final answer
+    INVOKE_VERIFIER = "verify" # Ask a verifier LLM to check constraints
     SKIP = "skip"              # No verification decision was made (baseline)
 
 
@@ -102,54 +92,31 @@ class VerificationAction(str, Enum):
 
 
 class CostModel(BaseModel):
-    """Assigns real costs to tokens and errors.
+    """Three-part cost decomposition for the Faultline framework.
 
-    This is what transforms the evaluation from descriptive measurement
-    into a decision-optimization problem. The oracle strategy is computed
-    by minimizing total_cost = token_cost + error_cost.
+    C_total(S) = C_tokens(S) + E[Damage_missed] + E[Damage_flipped]
+
+    Error cost C_e is NOT fixed — it is swept across multiple values
+    during post-hoc analysis to produce break-even crossover charts.
+    Total cost is computed during analysis, not at runtime.
     """
 
     # Token pricing (per 1K tokens)
     input_token_cost_per_1k: float = 0.005
     output_token_cost_per_1k: float = 0.015
 
-    # Error severity costs (domain-configurable)
-    error_costs: dict[str, float] = Field(default_factory=lambda: {
-        "none": 0.0,
-        "minor": 0.10,
-        "moderate": 1.00,
-        "severe": 5.00,
-        "critical": 25.00,
-    })
-
-    # Verification action costs (beyond base token cost)
-    verification_overhead: dict[str, float] = Field(default_factory=lambda: {
-        "accept": 0.0,
-        "retry": 0.0,       # Token cost captured separately
-        "critic": 0.0,      # Token cost captured separately
-        "verify": 0.0,      # Token cost captured separately
-        "skip": 0.0,
-    })
+    # Error cost sweep values (token equivalents) for break-even analysis
+    error_cost_sweep: list[float] = Field(
+        default_factory=lambda: [100.0, 500.0, 1000.0, 2500.0, 5000.0],
+        description="Downstream error cost C_e values for parameterized sweep.",
+    )
 
     def token_cost(self, input_tokens: int, output_tokens: int) -> float:
-        """Compute dollar cost of token usage."""
+        """Compute dollar cost of token usage (C_tokens component)."""
         return (
             (input_tokens / 1000) * self.input_token_cost_per_1k
             + (output_tokens / 1000) * self.output_token_cost_per_1k
         )
-
-    def error_cost(self, severity: ErrorSeverity) -> float:
-        """Compute dollar cost of an error at the given severity."""
-        return self.error_costs.get(severity.value, 0.0)
-
-    def total_cost(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        severity: ErrorSeverity,
-    ) -> float:
-        """Total cost = token spend + error damage."""
-        return self.token_cost(input_tokens, output_tokens) + self.error_cost(severity)
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +147,7 @@ class ToolResult(BaseModel):
     output: Any = None
     error: str | None = None
     corrupted: bool = False
-    corruption_mode: CorruptionMode = CorruptionMode.CLEAN
+    output_condition: OutputCondition = OutputCondition.CLEAN
 
 
 # ---------------------------------------------------------------------------
@@ -203,18 +170,26 @@ class Message(BaseModel):
 
 
 class TaskDefinition(BaseModel):
-    """A synthetic evaluation task."""
+    """A synthetic evaluation task with gold outputs and corruption variants."""
 
     task_id: str
     domain: TaskDomain
     description: str
     instructions: str
     tools: list[ToolDefinition] = Field(default_factory=list)
-    gold_state: dict[str, Any] = Field(default_factory=dict)
-    gold_answer: str | None = None
-    error_severity_map: dict[str, ErrorSeverity] = Field(
+    gold_tool_output: dict[str, Any] = Field(
         default_factory=dict,
-        description="Maps failure mode descriptions to severity levels for cost computation.",
+        description="The correct tool response. Used for oracle computation.",
+    )
+    gold_answer: str | None = None
+    gold_state: dict[str, Any] = Field(default_factory=dict)
+    corruption_variants: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Pre-defined corrupted outputs keyed by OutputCondition value.",
+    )
+    success_criteria: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Key fields to check, match types (exact, tolerance, set_equality), thresholds.",
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -228,7 +203,7 @@ class VerificationDecision(BaseModel):
     """Records what the agent chose to do at each decision point and why.
 
     For static strategies, action is predetermined.
-    For ADAPTIVE, the agent selects based on corruption signals.
+    For ADAPTIVE, the agent selects based on observable corruption signals.
     """
 
     step_index: int
@@ -237,14 +212,41 @@ class VerificationDecision(BaseModel):
         default=0.0,
         ge=0.0,
         le=1.0,
-        description="Agent's self-reported confidence in the tool output (0=suspicious, 1=trusted).",
+        description="Agent's confidence in the tool output (0=suspicious, 1=trusted).",
     )
     signals: dict[str, Any] = Field(
         default_factory=dict,
-        description="Features the adaptive policy used to decide (output entropy, format checks, etc).",
+        description="Observable features the adaptive policy π(x) used to decide.",
     )
     action_token_cost: int = 0
     action_latency_ms: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Recovery record
+# ---------------------------------------------------------------------------
+
+
+class RecoveryRecord(BaseModel):
+    """Four-part recovery assessment. All four must be true for full recovery.
+
+    Prevents rewarding lucky guesses or parametric knowledge bypass.
+    """
+
+    detection: bool = False
+    corrective_action: bool = False
+    task_success: bool = False
+    informed_correctness: bool = False
+
+    @property
+    def full_recovery(self) -> bool:
+        """True only if all four conditions are met."""
+        return (
+            self.detection
+            and self.corrective_action
+            and self.task_success
+            and self.informed_correctness
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -255,36 +257,33 @@ class VerificationDecision(BaseModel):
 class OracleAction(BaseModel):
     """What a perfect-information agent would have done at this step.
 
-    Computed post-hoc from labeled data. If the tool output was corrupted,
-    the oracle always verifies. If clean, the oracle always accepts.
-    The oracle uses the cheapest effective verification method.
+    Computed post-hoc from labeled data.
+    Clean output → Pass (no verification).
+    Corrupted output → cheapest effective tier (Retry, Critic, or Verifier).
     """
 
     step_index: int
     optimal_action: VerificationAction
-    optimal_cost: float = 0.0
+    optimal_token_cost: float = 0.0
     reasoning: str = ""
 
 
 class RegretRecord(BaseModel):
-    """The gap between what the agent actually spent and what the oracle would have spent.
+    """The gap between actual cost and oracle-optimal cost.
 
-    regret = actual_total_cost - oracle_total_cost
+    R(S) = C_total(S) - C_total(S*) >= 0
 
-    Positive regret means the agent wasted resources or missed an error.
-    Zero regret means the agent matched the oracle exactly.
-    Negative regret is impossible by definition (oracle is optimal).
+    Computed per error-cost level during post-hoc analysis.
+    Each entry in cost_by_error_level maps a C_e value to its
+    actual cost, oracle cost, regret, and price of uncertainty.
     """
 
     run_id: str
-    actual_total_cost: float = 0.0
-    oracle_total_cost: float = 0.0
-    regret: float = 0.0
     actual_decisions: list[VerificationDecision] = Field(default_factory=list)
     oracle_decisions: list[OracleAction] = Field(default_factory=list)
-    price_of_uncertainty: float = Field(
-        default=0.0,
-        description="regret / oracle_total_cost — the fractional cost of not knowing.",
+    cost_by_error_level: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyed by C_e value. Each contains actual_cost, oracle_cost, regret, pou.",
     )
 
 
@@ -311,7 +310,7 @@ class RunRecord(BaseModel):
     experiment_id: str
     task_id: str
     strategy: AgentStrategy
-    corruption_mode: CorruptionMode
+    output_condition: OutputCondition
     provider: str
     model: str
     trial: int = 1
@@ -320,8 +319,9 @@ class RunRecord(BaseModel):
     final_answer: str | None = None
     # --- Outcome assessment ---
     success: bool | None = None
-    error_severity: ErrorSeverity = ErrorSeverity.NONE
-    # --- Cost accounting ---
+    answer_flipped: bool = False
+    recovery: RecoveryRecord | None = None
+    # --- Cost accounting (runtime, not post-hoc) ---
     started_at: datetime | None = None
     completed_at: datetime | None = None
     total_tokens: int = 0
@@ -329,9 +329,7 @@ class RunRecord(BaseModel):
     total_output_tokens: int = 0
     total_latency_ms: float = 0.0
     total_token_cost: float = 0.0
-    total_error_cost: float = 0.0
-    total_cost: float = 0.0
-    # --- Oracle comparison ---
+    # --- Oracle comparison (computed post-hoc) ---
     regret: RegretRecord | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -347,14 +345,14 @@ class ExperimentConfig(BaseModel):
     experiment_id: str
     description: str = ""
     research_question: str = (
-        "Can a corruption-aware agent learn an adaptive verification policy "
-        "that minimizes expected total cost (token spend + error cost) across "
-        "heterogeneous failure modes, and how close does this policy come to "
-        "the oracle-optimal strategy?"
+        "What are the break-even conditions under which tool-output "
+        "verification becomes cost-negative for LLM agents, how do these "
+        "conditions vary across output conditions, and how closely can a "
+        "signal-based adaptive policy track the oracle-optimal verification frontier?"
     )
     tasks: list[str] = Field(default_factory=list)
     strategies: list[AgentStrategy] = Field(default_factory=list)
-    corruption_modes: list[CorruptionMode] = Field(default_factory=list)
+    output_conditions: list[OutputCondition] = Field(default_factory=list)
     providers: list[str] = Field(default_factory=list)
     cost_model: CostModel = Field(default_factory=CostModel)
     trials: int = 5
