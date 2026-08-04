@@ -12,7 +12,7 @@
 
 <!-- TODO: Replace with actual crossover chart after Day 34 -->
 <p align="center">
-  <img src="assets/crossover-placeholder.png" alt="Break-even crossover chart showing where each verification strategy transitions from cost-positive to cost-negative" width="700">
+  <img src="assets/crossover_placeholder_chart.png" alt="Break-even crossover chart showing where each verification strategy transitions from cost-positive to cost-negative" width="700">
 </p>
 
 <p align="center"><em>At what error cost does each strategy start paying for itself? The crossover chart maps the break-even frontier across all five strategies.</em></p>
