@@ -1,8 +1,30 @@
-# tracellm-faultline
+### TraceLLM-Faultline 
+**A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
+
+tracellm-faultline
 
 **A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
 
 Part of the [TraceLLM](https://github.com/cybr-wisp) project.
+
+
+# tracellm-faultline
+
+[![Tests](https://github.com/cybr-wisp/tracellm-faultline/actions/workflows/ci.yml/badge.svg)](https://github.com/cybr-wisp/tracellm-faultline/actions)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
+**A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
+
+## Key finding
+
+<!-- TODO: Replace with actual crossover chart after Day 34 -->
+<p align="center">
+  <img src="assets/crossover-placeholder.png" alt="Break-even crossover chart showing where each verification strategy transitions from cost-positive to cost-negative" width="700">
+</p>
+
+<p align="center"><em>At what error cost does each strategy start paying for itself? The crossover chart maps the break-even frontier across all five strategies.</em></p>
 
 ---
 
@@ -38,7 +60,7 @@ For every trajectory, Faultline computes:
 
 ## Architecture
 
-![Faultline V1 architecture](assets/architecture.png)
+![Faultline V1 architecture](assets/architecture_readme.png)
 
 | Symbol | Meaning |
 |---|---|
@@ -165,16 +187,11 @@ Detailed project documentation lives in [`docs/`](docs/):
 - **Task suite spec** — twelve fully specified tasks with tool definitions, gold outputs, and corruption variants
 - **Experiment plan** — frozen preregistration with conditions, stopping rules, recovery definitions, and analysis plan
 
-## Project status
 
-🚧 **In active development** — see [ROADMAP.md](ROADMAP.md) for milestones.
-
-## License
-
+### License
 [MIT](LICENSE)
 
-## Community
-
+### Community
 📜 [License](LICENSE) · 🤝 [Contributing](CONTRIBUTING.md) · 📋 [Code of Conduct](CODE_OF_CONDUCT.md) · 🗺️ [Roadmap](ROADMAP.md)
 
 
