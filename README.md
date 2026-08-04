@@ -50,41 +50,25 @@ For every trajectory, Faultline computes:
 **H3 — Plausible-but-wrong is the most expensive failure mode.** The price of uncertainty is highest for outputs that are structurally valid but semantically wrong — they evade cheap checks, require expensive verification, and cause maximum damage when missed.
 
 ## Architecture
-
 ![Faultline V1 architecture](assets/architecture_readme.png)
 
 | Symbol | Meaning |
 |---|---|
-| Blue highlight | Core innovation components |
-| → | Data flow direction |
-| · | Separator between peers |
-## Architecture
+| 🟣 Purple highlight | Core innovation components (adaptive policy, oracle, cost framework) |
+| → | Data flow direction between layers |
+| · | Separator between peer components within a layer |
+| ⚙️ Icons | Functional role of each module |
 
-<!-- Replace with architecture diagram image when available -->
+| Layer | Components |
+|---|---|
+| **Entry layer** | CLI commands: inspect, run, analyze, replay |
+| **Core engine** | Config (YAML), Runner (async), Tracing (events), Schemas (Pydantic) |
+| **Providers & tools** | Models (GPT-4o, Llama 3.1), Sandbox (synthetic), Corruption (4 conditions) |
+| **Agent strategies** | Baseline, Retry, Critic, Verifier, **Adaptive π(x)** |
+| **Storage** | SQLite / PostgreSQL |
+| **Analysis & outputs** | Metrics, Oracle S*(p,Cₑ,k), Cost framework R(S)·PoU·V(S)·p*, Break-even charts, Regret comparison, Trace explorer |
+| **Dashboard** | React + Vite |
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                      CLI / API                           │
-├────────────┬────────────┬────────────┬───────────────────┤
-│  Config    │   Runner   │  Tracing   │     Schemas       │
-│  YAML      │   async    │  events    │    Pydantic       │
-├────────────┴──────┬─────┴────────────┴───────────────────┤
-│   Providers       │   Tools          │   Corruption      │
-│  GPT-4o           │   synthetic      │   4 output        │
-│  Llama 3.1 8B     │   sandbox        │   conditions      │
-│  Fake             │                  │                   │
-├───────────────────┴──────────────────┴───────────────────┤
-│  Agents: Baseline │ Retry │ Critic │ Verifier │ π(x)     │
-├──────────────────────────────────────────────────────────┤
-│                 Storage (SQLite / PostgreSQL)             │
-├──────────────────────────────────────────────────────────┤
-│  Analysis: Metrics │ Oracle S*(p,Cₑ,k) │ Cost Framework  │
-├──────────────────────────────────────────────────────────┤
-│  Outputs: Break-even frontier │ Regret │ Trace explorer   │
-├──────────────────────────────────────────────────────────┤
-│                 Dashboard (React + Vite)                  │
-└──────────────────────────────────────────────────────────┘
-```
 
 ## Key concepts
 
