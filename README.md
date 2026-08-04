@@ -1,6 +1,6 @@
 # tracellm-faultline
 
-**An evaluation framework for measuring how reliably tool-using LLM agents detect and recover from corrupted tool outputs.**
+**A cost-sensitive evaluation framework for measuring when tool-output verification helps, hurts, or wastes money in LLM agent systems.**
 
 Part of the [TraceLLM](https://github.com/cybr-wisp) project.
 
@@ -8,33 +8,81 @@ Part of the [TraceLLM](https://github.com/cybr-wisp) project.
 
 ## Research question
 
-> How reliably can tool-using LLM agents recover after receiving corrupted tool outputs, and what reliability–cost trade-offs are created by retry, critic, and verifier strategies?
+> What are the break-even conditions under which tool-output verification becomes cost-negative for LLM agents, how do these conditions vary across output conditions, and how closely can a signal-based adaptive policy track the oracle-optimal verification frontier?
+
+## Why this matters
+
+LLM agents increasingly call external tools in production. When those tools return bad data, the agent can either blindly trust it (cheap but dangerous) or verify it (safe but expensive). Most research assumes verification is beneficial and asks how to do it efficiently. We ask the prior question: **when does verification destroy value?**
+
+We formalize this as a cost-minimization problem with an **oracle baseline** — if you knew exactly which outputs were corrupted and how, what would the cheapest correct strategy be? The gap between any real strategy and the oracle is the **price of uncertainty**, a single number that captures how much an agent pays for not knowing whether to trust its tools.
 
 ## What this does
 
-tracellm-faultline stress-tests tool-using LLM agents under controlled failure conditions. It injects corrupted outputs — malformed data, plausible but incorrect values, explicit errors, and missing fields — into synthetic tool environments, then measures whether agents detect the fault, recover correctly, or silently propagate bad information.
+Faultline injects controlled corruptions into synthetic tool outputs across four output conditions (clean, explicit error, malformed, plausible-but-wrong), then runs five agent strategies against them — from doing nothing (baseline) to a signal-based adaptive policy that escalates verification intensity based on observable corruption signals.
 
-It compares four recovery strategies (baseline, retry, critic, and verifier) across multiple model providers, capturing full execution traces, cost breakdowns, and statistical reliability metrics for every run.
+For every trajectory, Faultline computes:
+
+- **Break-even thresholds** — the corruption rate below which each strategy costs more than doing nothing
+- **Regret** — how much more a strategy costs than the oracle-optimal policy
+- **Price of uncertainty** — the normalized overhead of operating without perfect corruption knowledge
+- **Verification value** — whether a strategy creates or destroys economic value relative to baseline
+- **Crossover charts** — how the optimal strategy shifts as downstream error cost changes
+
+## Hypotheses
+
+**H1 — Verification has a break-even frontier, not a point.** Each static strategy becomes cost-negative below a corruption-rate threshold that varies by output condition and error cost. The frontier is a surface, not a line.
+
+**H2 — Adaptive beats uniform.** A signal-scoring heuristic achieves lower regret than any single static strategy applied uniformly across all conditions.
+
+**H3 — Plausible-but-wrong is the most expensive failure mode.** The price of uncertainty is highest for outputs that are structurally valid but semantically wrong — they evade cheap checks, require expensive verification, and cause maximum damage when missed.
 
 ## Architecture
 
+![Faultline V1 architecture](assets/architecture.png)
+
+| Symbol | Meaning |
+|---|---|
+| Blue highlight | Core innovation components |
+| → | Data flow direction |
+| · | Separator between peers |
+## Architecture
+
+<!-- Replace with architecture diagram image when available -->
+
 ```
-┌─────────────────────────────────────────────────────┐
-│                    CLI / API                         │
-├──────────┬──────────┬───────────┬───────────────────┤
-│ Configs  │  Runner  │  Tracing  │     Analysis      │
-│  YAML    │  async   │  events   │  metrics, stats   │
-├──────────┴────┬─────┴───────────┴───────────────────┤
-│   Providers   │   Tools        │   Corruption       │
-│  OpenAI       │   synthetic    │   fault injection   │
-│  Ollama       │   sandbox      │   4 modes          │
-│  Fake         │                │                    │
-├───────────────┴────────────────┴────────────────────┤
-│                   Storage (SQLite / Postgres)        │
-├─────────────────────────────────────────────────────┤
-│                   Dashboard (React + Vite)           │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      CLI / API                           │
+├────────────┬────────────┬────────────┬───────────────────┤
+│  Config    │   Runner   │  Tracing   │     Schemas       │
+│  YAML      │   async    │  events    │    Pydantic       │
+├────────────┴──────┬─────┴────────────┴───────────────────┤
+│   Providers       │   Tools          │   Corruption      │
+│  GPT-4o           │   synthetic      │   4 output        │
+│  Llama 3.1 8B     │   sandbox        │   conditions      │
+│  Fake             │                  │                   │
+├───────────────────┴──────────────────┴───────────────────┤
+│  Agents: Baseline │ Retry │ Critic │ Verifier │ π(x)     │
+├──────────────────────────────────────────────────────────┤
+│                 Storage (SQLite / PostgreSQL)             │
+├──────────────────────────────────────────────────────────┤
+│  Analysis: Metrics │ Oracle S*(p,Cₑ,k) │ Cost Framework  │
+├──────────────────────────────────────────────────────────┤
+│  Outputs: Break-even frontier │ Regret │ Trace explorer   │
+├──────────────────────────────────────────────────────────┤
+│                 Dashboard (React + Vite)                  │
+└──────────────────────────────────────────────────────────┘
 ```
+
+## Key concepts
+
+| Concept | Definition |
+|---|---|
+| **Oracle-optimal frontier** | Post-hoc cheapest correct strategy across (corruption rate × error cost × output condition) space |
+| **Break-even threshold** | Corruption rate below which a strategy costs more than doing nothing |
+| **Regret** | Actual total cost minus oracle total cost |
+| **Price of uncertainty** | Regret divided by oracle cost — the fractional overhead of imperfect information |
+| **Verification value V(S)** | C_total(Baseline) − C_total(S). Positive = helpful, negative = harmful |
+| **Adaptive policy π(x)** | Signal-based routing: Pass → Retry → Critic → Verifier based on observable features |
 
 ## Installation
 
@@ -96,12 +144,26 @@ uv run ruff format --check .
 
 ## Experiment design
 
-- **12–20 synthetic tasks** across three domains: order support, scheduling, structured data analysis
-- **4 corruption conditions:** clean output, explicit error, malformed/incomplete, plausible but incorrect
-- **4 agent strategies:** baseline, bounded retry, critic, verifier
-- **2 model sources:** one API model (OpenAI), one local model (Ollama)
+- **12 synthetic tasks** across three domains: order support, scheduling, structured data analysis
+- **4 output conditions:** clean, explicit error, malformed/incomplete, plausible-but-wrong
+- **5 agent strategies:** baseline, retry, critic, verifier, adaptive heuristic π(x)
+- **2 core models:** GPT-4o (API), Llama 3.1 8B (Ollama)
 - **5 repeated trials** per configuration
-- **Primary metrics:** success, recovery, tool correctness, consistency, latency, token cost
+- **5 error cost levels:** 100, 500, 1,000, 2,500, 5,000 token equivalents
+- **Oracle baseline** computed post-hoc from labeled ground-truth data
+- **~2,400 core trajectories**
+- **Primary outputs:** break-even thresholds, regret, price of uncertainty, crossover charts
+
+## Documentation
+
+Detailed project documentation lives in [`docs/`](docs/):
+
+- **Project foundation** — research question, hypotheses, formal key concepts, cost framework
+- **Scope** — scope rationale, execution checklist, scope-creep guardrails
+- **Strategies and types** — full specification of all five strategies, four output conditions, oracle framework, and strategy × condition interaction matrix
+- **Related work** — eight primary papers across six comparison dimensions with gap statement
+- **Task suite spec** — twelve fully specified tasks with tool definitions, gold outputs, and corruption variants
+- **Experiment plan** — frozen preregistration with conditions, stopping rules, recovery definitions, and analysis plan
 
 ## Project status
 
@@ -110,3 +172,6 @@ uv run ruff format --check .
 ## License
 
 [MIT](LICENSE)
+
+
+Built with ☕ by Marie Sindhu (cybr-wisp)
